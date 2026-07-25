@@ -1,69 +1,72 @@
 # Funding Alerts Bot
 
-Funding-rate and market-structure alert bot for crypto futures monitoring.
-
-The bot periodically collects market snapshots, compares current data with historical data, evaluates funding/price/open-interest/liquidation conditions, and sends Telegram alerts when configured thresholds are met.
+A Telegram bot project for automating operational workflows and user commands.
 
 ## Features
 
-- Periodic market snapshot collection.
-- SQLite storage for recent data.
-- Funding-rate threshold detection.
-- Price, open-interest, and liquidation filters.
-- Telegram alert delivery.
-- systemd service file for VPS deployment.
+- Telegram bot command handling and operational notifications.
+- Persistent storage for state, logs, or domain data.
 
-## Environment
+## Architecture
 
-```bash
-cp .env.example .env
-```
+- **Repository:** `MilaArtyNew/funding-alerts-bot`
+- **Primary stack:** Python, systemd, Railway
+- **Entrypoints and scripts:**
+  - `main.py`
+- **Notable dependencies:** `httpx`
 
-Required variables:
+## Configuration
 
-- `TELEGRAM_TOKEN` — Telegram bot token.
-- `TELEGRAM_CHAT_ID` — target Telegram chat ID.
+Configure the service with environment variables. Do not commit real secrets to the repository.
 
-Optional variables:
+- `TELEGRAM_CHAT_ID` — required or optional runtime configuration. See deployment environment for the actual value.
+- `TELEGRAM_TOKEN` — required or optional runtime configuration. See deployment environment for the actual value.
 
-- `FUNDING_THRESHOLD` — current funding threshold.
-- `FUNDING_DELTA_MIN` — minimum funding drop over the lookback window.
-- `PRICE_CHANGE_MIN` — minimum price change percentage.
-- `OI_CHANGE_MIN` — minimum open-interest change percentage.
-- `SHORT_LIQ_MIN` — minimum short liquidation amount in USD.
-- `POLL_INTERVAL` — polling interval in seconds.
-- `LOOKBACK_MINUTES` — lookback window.
-- `TOP_N_COINS` — number of coins to monitor.
-- `DATA_DIR` — data directory for the SQLite database.
-
-## Local Run
+## Setup
 
 ```bash
+git clone https://github.com/MilaArtyNew/funding-alerts-bot
+cd funding-alerts-bot
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
-nano .env
+```
+
+## Running Locally
+
+```bash
 python main.py
 ```
 
-## Deploy as systemd
+## Bot Commands
 
-```bash
-sudo cp systemd/funding-alerts.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable funding-alerts
-sudo systemctl start funding-alerts
-sudo journalctl -u funding-alerts -f
-```
+No interactive Telegram commands were detected automatically. If this service sends alerts only, document the operational controls here when they are added.
 
-## Risk Notes
+If a command requires extra input and the argument is missing, the bot should ask a follow-up question instead of failing silently.
 
-- Alerts are signals, not trade instructions.
-- Funding spikes can reverse quickly.
-- Use alerts as a filter for further review, not as automated execution logic.
+## Deployment Notes
+
+- Keep secrets in the deployment platform environment variables, not in Git.
+- Use the default branch as the source of truth for deployments.
+- Check logs after every deployment and verify the `/status` or health endpoint when available.
+- If the project uses a scheduler, verify timezone assumptions and idempotency before enabling it in production.
+
+## Operational Notes
+
+- Review logs after startup for missing environment variables or API authentication errors.
+- Keep command names in English and document every user-facing command in this README.
+- For Telegram bots, `/help` should list the same commands documented here.
+- Inline buttons should edit the original message with the final status rather than sending duplicate messages.
+
+## Troubleshooting
+
+- **Bot does not respond:** verify the bot token, webhook/polling mode, and chat permissions.
+- **Missing data:** check API keys, rate limits, and upstream service status.
+- **Deployment starts but exits:** inspect platform logs for missing environment variables or import errors.
+- **Commands differ from README:** update the command list here and in the bot command menu at the same time.
 
 ## Security
 
-- Do not commit `.env`.
-- Store Telegram credentials only in environment variables.
+- Never commit `.env` files, API keys, private keys, Telegram tokens, or session strings.
+- Use `.env.example` for placeholders only.
+- Rotate any credential that was accidentally committed.
