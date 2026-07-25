@@ -1,11 +1,12 @@
 # Funding Alerts Bot
 
-A Telegram bot project for automating operational workflows and user commands.
+Funding-rate alert bot for crypto derivatives markets. It monitors funding conditions and sends Telegram alerts when configured thresholds or opportunities appear.
 
 ## Features
 
-- Telegram bot command handling and operational notifications.
-- Persistent storage for state, logs, or domain data.
+- Monitors funding rates and related market conditions.
+- Sends Telegram alerts for configured funding opportunities.
+- Documents bot token, schedule/threshold configuration, and deployment notes.
 
 ## Architecture
 
