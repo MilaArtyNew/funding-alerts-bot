@@ -39,21 +39,45 @@ def _chart_url(sig: Signal) -> str:
     return f"https://www.tradingview.com/chart/?symbol=BINGX:{base}-USDT"
 
 
-def format_message(sig: Signal) -> str:
-    emoji = "🔥 Strong signal" if sig.strong else "🟢 Long setup"
-    liq_line = f"\n🔥 Short liquidations: {_fmt_liq(sig.short_liq)}" if sig.strong else ""
-    funding_count = _fmt_funding_count(sig.next_funding_time)
-    chart = _chart_url(sig)
+def _fmt_pct(value: float | None) -> str:
+    return "н/д" if value is None else f"{value:+.1f}%"
 
-    return (
-        f"{emoji} — {sig.symbol}\n"
-        f"\n⚙️ Funding 30m: {sig.funding_prev:+.2f}% → {sig.funding_now:+.2f}%"
-        f"\n⌛️ Funding count: {funding_count}"
-        f"\n💰 Price: {sig.price_prev} → {sig.price_now} ({sig.price_change_pct:+.4f}%)"
-        f"\n📈 OI: {sig.oi_change_pct:+.1f}%"
-        f"{liq_line}"
-        f"\n\n📊 Chart: {chart}"
+
+def _fmt_rsi(value: float | None) -> str:
+    return "н/д" if value is None else f"{value:.0f}"
+
+
+def format_message(sig: Signal) -> str:
+    header = "🔥 Strong signal" if sig.strong else "🟢 Long setup"
+    trend = "углубляется" if sig.funding_delta < 0 else "растёт"
+    funding_count = _fmt_funding_count(sig.next_funding_time)
+
+    lines = [
+        f"{header} — {sig.symbol}",
+        "",
+        f"⚙️ Фандинг 30м: {sig.funding_prev:+.2f}% → {sig.funding_now:+.2f}% ({trend})",
+        f"⏱️ Выплата фандинга через {funding_count}",
+        f"💹 Цена за 30м: {sig.price_change_pct:+.2f}%",
+        "",
+        f"{sig.verdict_emoji} {sig.verdict}",
+    ]
+
+    if sig.ls_long is not None and sig.ls_short is not None:
+        lines.append(f"⚖️ Л/Ш 1ч: {sig.ls_long:.0f}%/{sig.ls_short:.0f}%")
+    else:
+        lines.append("⚖️ Л/Ш 1ч: н/д")
+
+    # Ликвидации доступны только с ключом Coinglass — без него строку не показываем
+    if sig.liq_short is not None and sig.liq_long is not None:
+        lines.append(f"💥 Ликв 1ч: шорты {_fmt_liq(sig.liq_short)} · лонги {_fmt_liq(sig.liq_long)}")
+
+    lines.append(f"📈 OI: 1ч {_fmt_pct(sig.oi_1h)} · 4ч {_fmt_pct(sig.oi_4h)}")
+    lines.append(
+        f"📊 RSI: 15м {_fmt_rsi(sig.rsi_15m)} · "
+        f"1ч {_fmt_rsi(sig.rsi_1h)} · 4ч {_fmt_rsi(sig.rsi_4h)}"
     )
+
+    return "\n".join(lines)
 
 
 def send_signal(sig: Signal):

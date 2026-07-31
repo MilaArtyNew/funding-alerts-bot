@@ -20,6 +20,21 @@ class Signal:
     next_funding_time: int     # ms timestamp
     strong: bool
 
+    # Контекст, дозаполняется в enrich.py уже после отбора сигнала.
+    # None = данные недоступны (нет источника / монеты нет на Binance / мало истории)
+    rsi_15m: float | None = None
+    rsi_1h: float | None = None
+    rsi_4h: float | None = None
+    ls_long: float | None = None    # % счетов в лонге за 1ч
+    ls_short: float | None = None   # % счетов в шорте за 1ч
+    oi_1h: float | None = None      # изменение OI за 1ч, %
+    oi_4h: float | None = None      # изменение OI за 4ч, %
+    liq_short: float | None = None  # ликвидировано шортов за 1ч, $
+    liq_long: float | None = None   # ликвидировано лонгов за 1ч, $
+    verdict: str = "СЛАБЫЙ"
+    verdict_emoji: str = "🟡"
+    verdict_score: float = 0.0
+
 
 def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:
     prev_map = {(r["symbol"], r["exchange"]): r for r in previous}

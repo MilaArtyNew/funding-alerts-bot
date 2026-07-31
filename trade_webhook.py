@@ -22,9 +22,13 @@ def send_trade_signal(sig: Signal):
         "symbol": sig.symbol,
         "price": sig.price_now,
         "strong": sig.strong,
+        "verdict": sig.verdict,             # ВХОД | СЛАБЫЙ — исполнитель пишет в статистику
+        "verdict_score": sig.verdict_score,
         "funding_now": sig.funding_now,
         "oi_change_pct": sig.oi_change_pct,
         "price_change_pct": sig.price_change_pct,
+        "rsi_1h": sig.rsi_1h,
+        "ls_short": sig.ls_short,
     }
     try:
         resp = httpx.post(TRADE_WEBHOOK_URL, json=payload, headers=headers, timeout=8)

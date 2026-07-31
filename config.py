@@ -16,6 +16,13 @@ COOLDOWN_MINUTES = int(os.environ.get("COOLDOWN_MINUTES", "360"))          # min
 # Monitoring
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "300"))   # seconds
 LOOKBACK_MINUTES = int(os.environ.get("LOOKBACK_MINUTES", "30"))
+SNAPSHOT_RETENTION_HOURS = float(os.environ.get("SNAPSHOT_RETENTION_HOURS", "5"))  # нужно ≥4ч для OI 4ч
+
+# Signal context (enrich.py)
+COINGLASS_API_KEY = os.environ.get("COINGLASS_API_KEY", "")   # без него строка ликвидаций не выводится
+SHORT_DOMINANCE_MIN = float(os.environ.get("SHORT_DOMINANCE_MIN", "55"))  # % шортов = толпа в шортах
+RSI_OVERHEATED = float(os.environ.get("RSI_OVERHEATED", "70"))            # RSI 1ч выше = ход уже сделан
+VERDICT_ENTRY_SCORE = float(os.environ.get("VERDICT_ENTRY_SCORE", "2.5")) # балл для вердикта ВХОД
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 DB_PATH = os.path.join(DATA_DIR, "snapshots.db")
