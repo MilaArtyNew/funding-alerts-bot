@@ -34,6 +34,7 @@ class Signal:
     verdict: str = "СЛАБЫЙ"
     verdict_emoji: str = "🟡"
     verdict_score: float = 0.0
+    verdict_partial: bool = False   # вердикт посчитан без Л/Ш (источник не ответил)
 
 
 def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:

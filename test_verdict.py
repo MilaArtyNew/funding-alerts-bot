@@ -47,11 +47,23 @@ def main():
             failed.append(coin)
         print(f"{coin:9} ожидали {expected:7} получили {got:7} (баллов {score:.0f}/3)  {mark}")
 
-    # Недостаток данных не должен выдавать ложный вердикт
-    for name, sig in (("нет OI 4ч", _sig(60, 1.0, None)), ("нет Л/Ш", _sig(None, 1.0, 1.0))):
+    # Без OI правило не считается вообще
+    sig = _sig(60, 1.0, None)
+    _, got, _ = verdict(sig)
+    print(f"{'нет OI 4ч':12} → {got} (ожидали н/д)")
+    if got != "н/д":
+        failed.append("нет OI 4ч")
+
+    # Без Л/Ш решаем по двум условиям и помечаем неполноту
+    for name, ls, oi1, oi4, expected in (
+        ("нет Л/Ш, OI+", None, 1.0, 1.0, "ВХОД"),
+        ("нет Л/Ш, OI-", None, 1.0, -1.0, "СЛАБЫЙ"),
+    ):
+        sig = _sig(ls, oi1, oi4)
         _, got, _ = verdict(sig)
-        print(f"{name:9} → {got}")
-        if got != "н/д":
+        ok = got == expected and sig.verdict_partial
+        print(f"{name:12} → {got}, пометка «без Л/Ш»: {sig.verdict_partial} (ожидали {expected})")
+        if not ok:
             failed.append(name)
 
     print(f"\n{'ПРОВАЛ: ' + ', '.join(failed) if failed else 'ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ'}")

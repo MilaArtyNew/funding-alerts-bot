@@ -59,7 +59,7 @@ def format_message(sig: Signal) -> str:
         f"⏱️ Выплата фандинга через {funding_count}",
         f"💹 Цена за 30м: {sig.price_change_pct:+.2f}%",
         "",
-        f"{sig.verdict_emoji} {sig.verdict}",
+        f"{sig.verdict_emoji} {sig.verdict}" + (" · без Л/Ш" if sig.verdict_partial else ""),
     ]
 
     if sig.ls_long is not None and sig.ls_short is not None:

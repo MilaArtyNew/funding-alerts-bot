@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 BINGX_BASE = "https://open-api.bingx.com"
 BINANCE_BASE = "https://fapi.binance.com"
+BYBIT_BASE = "https://api.bybit.com"
 COINGLASS_BASE = "https://open-api-v4.coinglass.com"
 
 CLIENT = httpx.Client(timeout=10)
@@ -79,22 +80,52 @@ def fetch_rsi(symbol: str) -> dict[str, float | None]:
 #  Long / Short accounts
 # ---------------------------------------------------------------------- #
 
-def fetch_long_short(symbol: str) -> tuple[float, float] | None:
-    """(long %, short %) по счетам за 1ч. None — если монеты нет на Binance."""
-    binance_symbol = symbol.replace("-", "")
-    try:
-        resp = CLIENT.get(f"{BINANCE_BASE}/futures/data/globalLongShortAccountRatio",
-                          params={"symbol": binance_symbol, "period": "1h", "limit": 1})
-        if resp.status_code != 200:
-            return None
-        rows = resp.json()
-        if not rows:
-            return None
-        row = rows[-1]
-        return round(float(row["longAccount"]) * 100, 1), round(float(row["shortAccount"]) * 100, 1)
-    except Exception as e:
-        log.debug(f"L/S {symbol}: {e}")
+def _ls_binance(flat_symbol: str) -> tuple[float, float] | None:
+    resp = CLIENT.get(f"{BINANCE_BASE}/futures/data/globalLongShortAccountRatio",
+                      params={"symbol": flat_symbol, "period": "1h", "limit": 1})
+    if resp.status_code != 200:
+        # 451 — Binance блокирует облачные/региональные IP. Важно видеть в логах,
+        # иначе источник молча отваливается и вердикт превращается в «н/д».
+        log.warning(f"L/S binance {flat_symbol}: HTTP {resp.status_code}")
         return None
+    rows = resp.json()
+    if not rows:
+        return None
+    row = rows[-1]
+    return round(float(row["longAccount"]) * 100, 1), round(float(row["shortAccount"]) * 100, 1)
+
+
+def _ls_bybit(flat_symbol: str) -> tuple[float, float] | None:
+    resp = CLIENT.get(f"{BYBIT_BASE}/v5/market/account-ratio",
+                      params={"category": "linear", "symbol": flat_symbol,
+                              "period": "1h", "limit": 1})
+    if resp.status_code != 200:
+        log.warning(f"L/S bybit {flat_symbol}: HTTP {resp.status_code}")
+        return None
+    rows = ((resp.json() or {}).get("result") or {}).get("list") or []
+    if not rows:
+        return None
+    row = rows[0]
+    return round(float(row["buyRatio"]) * 100, 1), round(float(row["sellRatio"]) * 100, 1)
+
+
+def fetch_long_short(symbol: str) -> tuple[float, float] | None:
+    """(long %, short %) по счетам за 1ч.
+
+    Binance основной, Bybit запасной: у Binance шире покрытие мелких монет, но он
+    отдаёт 451 с части облачных IP. None — только если оба источника не ответили.
+    """
+    flat = symbol.replace("-", "")
+    for name, fn in (("binance", _ls_binance), ("bybit", _ls_bybit)):
+        try:
+            res = fn(flat)
+            if res:
+                log.info(f"L/S {symbol}: {res[0]}%/{res[1]}% ({name})")
+                return res
+        except Exception as e:
+            log.warning(f"L/S {name} {symbol}: {e}")
+    log.warning(f"L/S {symbol}: нет данных ни у Binance, ни у Bybit")
+    return None
 
 
 # ---------------------------------------------------------------------- #
@@ -137,14 +168,17 @@ def verdict(sig) -> tuple[str, str, float]:
     RSI и ликвидации на вердикт не влияют — по ним правило не сходится (7/10 и 5/10
     промахов), они остаются справочными.
     """
-    if sig.oi_1h is None or sig.oi_4h is None or sig.ls_short is None:
-        return "▫️", "н/д", 0.0
+    if sig.oi_1h is None or sig.oi_4h is None:
+        return "▫️", "н/д", 0.0   # без OI правило не считается вообще
 
-    checks = (
-        sig.oi_1h >= OI_GROWTH_MIN,
-        sig.oi_4h >= OI_GROWTH_MIN,
-        sig.ls_short >= SHORT_SHARE_MIN,
-    )
+    checks = [sig.oi_1h >= OI_GROWTH_MIN, sig.oi_4h >= OI_GROWTH_MIN]
+    if sig.ls_short is None:
+        # Л/Ш не достали — решаем по двум условиям из трёх и помечаем неполноту,
+        # чтобы сигнал не оставался без вердикта из-за отвалившегося источника
+        sig.verdict_partial = True
+    else:
+        checks.append(sig.ls_short >= SHORT_SHARE_MIN)
+
     score = float(sum(checks))
     if all(checks):
         return "🟢", "ВХОД", score
