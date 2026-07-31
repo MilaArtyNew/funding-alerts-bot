@@ -20,3 +20,7 @@ LOOKBACK_MINUTES = int(os.environ.get("LOOKBACK_MINUTES", "30"))
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 DB_PATH = os.path.join(DATA_DIR, "snapshots.db")
 
+# Trade executor webhook (funding-executor on VPS) — empty URL disables forwarding
+TRADE_WEBHOOK_URL = os.environ.get("TRADE_WEBHOOK_URL", "")
+TRADE_WEBHOOK_SECRET = os.environ.get("TRADE_WEBHOOK_SECRET", "")
+

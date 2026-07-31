@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from signal_engine import Signal
 from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, COOLDOWN_MINUTES
+from trade_webhook import send_trade_signal
 
 log = logging.getLogger(__name__)
 
@@ -80,3 +81,4 @@ def send_signals(signals: list[Signal]):
             continue
         send_signal(sig)
         _cooldown[key] = now
+        send_trade_signal(sig)   # forward to funding-executor (no-op if URL not set)
