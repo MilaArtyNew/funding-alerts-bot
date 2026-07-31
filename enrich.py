@@ -13,9 +13,7 @@ import logging
 
 import httpx
 
-from config import (
-    COINGLASS_API_KEY, RSI_OVERHEATED, SHORT_DOMINANCE_MIN, VERDICT_ENTRY_SCORE,
-)
+from config import COINGLASS_API_KEY, OI_GROWTH_MIN, SHORT_SHARE_MIN
 
 log = logging.getLogger(__name__)
 
@@ -130,41 +128,25 @@ def fetch_liquidations(symbol: str) -> tuple[float, float] | None:
 # ---------------------------------------------------------------------- #
 
 def verdict(sig) -> tuple[str, str, float]:
-    """(emoji, label, score). Оценивает, насколько сетап годится для лонга по сквизу.
+    """(emoji, label, score) — сколько из трёх условий выполнено.
 
-    Логика: толпа в шортах + растущий OI = топливо для сквиза; перегретый RSI 1ч —
-    против входа, ход уже сделан. Недоступные данные дают 0, а не штраф.
+    Правило восстановлено по 10 сигналам конкурента (совпадение 10/10, см. README):
+    ВХОД = OI растёт И на 1ч, И на 4ч, И толпа не в лонге (шортов ≥ SHORT_SHARE_MIN).
+
+    Смысл: позиции набираются на обоих горизонтах, а шорты есть кому ликвидировать.
+    RSI и ликвидации на вердикт не влияют — по ним правило не сходится (7/10 и 5/10
+    промахов), они остаются справочными.
     """
-    score = 0.0
+    if sig.oi_1h is None or sig.oi_4h is None or sig.ls_short is None:
+        return "▫️", "н/д", 0.0
 
-    if sig.ls_short is not None:
-        if sig.ls_short >= SHORT_DOMINANCE_MIN + 10:
-            score += 1.5
-        elif sig.ls_short >= SHORT_DOMINANCE_MIN:
-            score += 1.0
-
-    if sig.rsi_1h is not None:
-        if sig.rsi_1h >= RSI_OVERHEATED:
-            score -= 1.0
-        elif sig.rsi_1h < 65:
-            score += 0.5
-
-    if sig.rsi_4h is not None and sig.rsi_4h < 60:
-        score += 0.5
-
-    if sig.oi_1h is not None and sig.oi_1h > 0:
-        score += 0.5
-    if sig.oi_4h is not None and sig.oi_4h > 0:
-        score += 0.5
-
-    if sig.liq_short is not None and sig.liq_long is not None:
-        if sig.liq_short > sig.liq_long * 2:
-            score += 1.0
-
-    if sig.strong:
-        score += 1.0
-
-    if score >= VERDICT_ENTRY_SCORE:
+    checks = (
+        sig.oi_1h >= OI_GROWTH_MIN,
+        sig.oi_4h >= OI_GROWTH_MIN,
+        sig.ls_short >= SHORT_SHARE_MIN,
+    )
+    score = float(sum(checks))
+    if all(checks):
         return "🟢", "ВХОД", score
     return "🟡", "СЛАБЫЙ", score
 

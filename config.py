@@ -20,9 +20,12 @@ SNAPSHOT_RETENTION_HOURS = float(os.environ.get("SNAPSHOT_RETENTION_HOURS", "5")
 
 # Signal context (enrich.py)
 COINGLASS_API_KEY = os.environ.get("COINGLASS_API_KEY", "")   # без него строка ликвидаций не выводится
-SHORT_DOMINANCE_MIN = float(os.environ.get("SHORT_DOMINANCE_MIN", "55"))  # % шортов = толпа в шортах
-RSI_OVERHEATED = float(os.environ.get("RSI_OVERHEATED", "70"))            # RSI 1ч выше = ход уже сделан
-VERDICT_ENTRY_SCORE = float(os.environ.get("VERDICT_ENTRY_SCORE", "2.5")) # балл для вердикта ВХОД
+
+# Вердикт ВХОД: OI растёт на обоих горизонтах + толпа не в лонге.
+# Пороги подобраны по 10 сигналам конкурента (совпадение 10/10).
+OI_GROWTH_MIN = float(os.environ.get("OI_GROWTH_MIN", "0.1"))      # % роста OI на 1ч и 4ч
+SHORT_SHARE_MIN = float(os.environ.get("SHORT_SHARE_MIN", "45"))   # мин. доля шортов, %
+CROWD_SHORT_PCT = float(os.environ.get("CROWD_SHORT_PCT", "65"))   # с этой доли помечаем «толпа в шорте»
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 DB_PATH = os.path.join(DATA_DIR, "snapshots.db")

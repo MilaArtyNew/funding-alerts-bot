@@ -3,7 +3,7 @@ import httpx
 import logging
 from datetime import datetime, timedelta
 from signal_engine import Signal
-from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, COOLDOWN_MINUTES
+from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, COOLDOWN_MINUTES, CROWD_SHORT_PCT
 from trade_webhook import send_trade_signal
 
 log = logging.getLogger(__name__)
@@ -63,7 +63,8 @@ def format_message(sig: Signal) -> str:
     ]
 
     if sig.ls_long is not None and sig.ls_short is not None:
-        lines.append(f"⚖️ Л/Ш 1ч: {sig.ls_long:.0f}%/{sig.ls_short:.0f}%")
+        crowd = " — толпа в шорте" if sig.ls_short >= CROWD_SHORT_PCT else ""
+        lines.append(f"⚖️ Л/Ш 1ч: {sig.ls_long:.0f}%/{sig.ls_short:.0f}%{crowd}")
     else:
         lines.append("⚖️ Л/Ш 1ч: н/д")
 
