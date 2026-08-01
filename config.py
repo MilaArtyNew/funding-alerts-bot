@@ -30,6 +30,10 @@ CROWD_SHORT_PCT = float(os.environ.get("CROWD_SHORT_PCT", "65"))   # с этой
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 DB_PATH = os.path.join(DATA_DIR, "snapshots.db")
 
+# Прогрев: снапшоты копятся, сигналы считаются и пишутся в лог, но никуда не уходят.
+# Нужен при переезде — OI 1ч/4ч требуют 4 часа истории, до этого вердикт был бы «н/д».
+DRY_RUN = os.environ.get("DRY_RUN", "false").strip().lower() in ("1", "true", "yes", "on")
+
 # Trade executor webhook (funding-executor on VPS) — empty URL disables forwarding
 TRADE_WEBHOOK_URL = os.environ.get("TRADE_WEBHOOK_URL", "")
 TRADE_WEBHOOK_SECRET = os.environ.get("TRADE_WEBHOOK_SECRET", "")

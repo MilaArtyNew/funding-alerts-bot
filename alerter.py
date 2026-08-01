@@ -3,7 +3,7 @@ import httpx
 import logging
 from datetime import datetime, timedelta
 from signal_engine import Signal
-from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, COOLDOWN_MINUTES, CROWD_SHORT_PCT
+from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, COOLDOWN_MINUTES, CROWD_SHORT_PCT, DRY_RUN
 from trade_webhook import send_trade_signal
 
 log = logging.getLogger(__name__)
@@ -103,6 +103,11 @@ def send_signals(signals: list[Signal]):
         last = _cooldown.get(key)
         if last and (now - last) < timedelta(minutes=COOLDOWN_MINUTES):
             log.debug(f"Cooldown: {sig.symbol} ({sig.exchange})")
+            continue
+        if DRY_RUN:
+            # Прогрев: показываем, что ушло бы в Telegram, но не отправляем и не торгуем.
+            # Кулдаун тоже не пишем — после снятия DRY_RUN сигнал должен сработать заново.
+            log.info(f"DRY_RUN, не отправлено:\n{format_message(sig)}")
             continue
         send_signal(sig)
         _cooldown[key] = now

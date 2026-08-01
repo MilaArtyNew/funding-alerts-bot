@@ -1,0 +1,14 @@
+[Unit]
+Description=Funding Alerts Bot — funding-flip long signals (@fund_mi_bot)
+After=network.target
+
+[Service]
+User=gpt
+WorkingDirectory=/home/gpt/funding-alerts-bot
+EnvironmentFile=/home/gpt/funding-alerts-bot/.env
+ExecStart=/home/gpt/funding-alerts-bot/venv/bin/python main.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

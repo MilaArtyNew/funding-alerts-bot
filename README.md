@@ -71,3 +71,23 @@ If a command requires extra input and the argument is missing, the bot should as
 - Never commit `.env` files, API keys, private keys, Telegram tokens, or session strings.
 - Use `.env.example` for placeholders only.
 - Rotate any credential that was accidentally committed.
+
+## Deployment: VPS (since 2026-08-01)
+
+Moved off Railway because Binance (`451`) and Bybit (`403`) geo-block Railway egress IPs,
+so the long/short ratio never arrived and the verdict silently degraded.
+Both sources answer normally from the VPS.
+
+```bash
+sudo systemctl status funding-alerts-bot
+sudo journalctl -u funding-alerts-bot -f
+```
+
+Unit file: `systemd/funding-alerts-bot.service`, env in `.env` (chmod 600, owner `gpt`).
+
+### DRY_RUN
+
+`DRY_RUN=true` collects snapshots and evaluates signals but sends nothing to Telegram
+and forwards nothing to the executor — the formatted message goes to the log instead.
+Needed when relocating: `OI 1h/4h` require 4 hours of local snapshot history, and until
+that exists every verdict would be `н/д`.
