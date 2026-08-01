@@ -42,13 +42,23 @@ def _bingx_funding_one(symbol: str) -> tuple[str, dict | None]:
         return symbol, None
 
 
-def _bingx_oi_one(symbol: str, price: float) -> tuple[str, float | None]:
+def _bingx_oi_one(symbol: str) -> tuple[str, float | None]:
+    """Открытый интерес как его отдаёт BingX — уже в USDT, умножать на цену не надо.
+
+    Раньше здесь было `* price`. Поле и так номинировано в долларах (BTC-USDT
+    отдаёт ~7.8e8 при цене 63k — как монеты это было бы больше всей эмиссии),
+    так что старое значение было в бессмысленных единицах, а рост OI за 1ч/4ч
+    дополнительно включал в себя рост цены. Сигнал мы даём только на растущей цене,
+    поэтому OI почти всегда выходил положительным и вердикт ВХОД срабатывал вхолостую.
+    Проверено на 4 сигналах: расхождение с конкурентом в точности равно росту цены
+    за тот же час.
+    """
     try:
         data = _get(
             f"{BINGX_BASE}/openApi/swap/v2/quote/openInterest",
             {"symbol": symbol},
         )["data"]
-        return symbol, float(data["openInterest"]) * price
+        return symbol, float(data["openInterest"])
     except Exception as e:
         log.debug(f"BingX OI error {symbol}: {e}")
         return symbol, None
@@ -71,7 +81,7 @@ def collect_snapshot() -> list[dict]:
 
     oi_map = {}
     with ThreadPoolExecutor(max_workers=20) as pool:
-        futures = {pool.submit(_bingx_oi_one, s, prices.get(s, 1.0)): s for s in symbols}
+        futures = {pool.submit(_bingx_oi_one, s): s for s in symbols}
         for f in as_completed(futures):
             sym, oi = f.result()
             if oi is not None:
