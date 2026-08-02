@@ -41,7 +41,19 @@ def save_snapshots(records: list[dict]) -> int:
 
 
 def get_snapshots_before(ts: int, lookback_seconds: int) -> list[dict]:
+    """Ближайший снапшот по каждой паре не новее чем lookback_seconds назад.
+
+    Нижняя граница обязательна. Символы регулярно выпадают из отдельных циклов
+    (BingX режет часть ответов на пиковых запросах — разрывов >10м набирается
+    под тысячу за 5ч истории), а без floor запрос брал бы любую самую свежую
+    подходящую запись, сколь угодно старую. Тогда «цена за 30м» молча считалась бы
+    за 2 часа, и после каждого простоя сервиса шли бы сигналы по растянутому окну.
+    Лучше отдать пусто и не показать вердикт, чем показать неверный горизонт.
+    """
     target = ts - lookback_seconds
+    # Допуск = четыре цикла опроса. Записи и в норме приходят с запозданием
+    # (цикл ~5м + пропущенные символы), на 30-минутном окне это до 44м.
+    floor = target - max(1200, int(lookback_seconds * 0.25))
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute("""
@@ -53,7 +65,8 @@ def get_snapshots_before(ts: int, lookback_seconds: int) -> list[dict]:
             WHERE ts <= :target
             GROUP BY symbol, exchange
         ) best ON s.symbol = best.symbol AND s.exchange = best.exchange AND s.ts = best.max_ts
-    """, {"target": target}).fetchall()
+        WHERE s.ts >= :floor
+    """, {"target": target, "floor": floor}).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
