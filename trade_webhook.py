@@ -29,6 +29,11 @@ def send_trade_signal(sig: Signal):
         "price_change_pct": sig.price_change_pct,
         "rsi_1h": sig.rsi_1h,
         "ls_short": sig.ls_short,
+        # Нужны исполнителю только для статистики: гипотеза «сигналы ближе часа
+        # к выплате отрабатывают хуже» проверяется на 30 сделках, а восстановить
+        # эти числа задним числом неоткуда — снапшоты живут 5 часов.
+        "next_funding_time": sig.next_funding_time,
+        "funding_interval_h": sig.funding_interval_h,
     }
     try:
         resp = httpx.post(TRADE_WEBHOOK_URL, json=payload, headers=headers, timeout=8)

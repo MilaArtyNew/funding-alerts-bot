@@ -77,6 +77,32 @@ def fetch_rsi(symbol: str) -> dict[str, float | None]:
 
 
 # ---------------------------------------------------------------------- #
+#  Интервал выплаты фандинга
+# ---------------------------------------------------------------------- #
+
+def fetch_funding_interval(symbol: str) -> float | None:
+    """Интервал выплаты фандинга в часах — по двум последним фактическим выплатам.
+
+    По одному `next_funding_time` интервал не восстановить, а alerter раньше угадывал
+    его по остатку времени и врал: монета с 4ч интервалом за 46м до выплаты
+    помечалась как «(1h)». Настоящий 1ч интервал на BingX у единиц монет из ~545,
+    так что догадка ошибалась систематически и испортила разбор статистики 01.08.
+    """
+    try:
+        resp = CLIENT.get(f"{BINGX_BASE}/openApi/swap/v2/quote/fundingRate",
+                          params={"symbol": symbol, "limit": 2})
+        rows = (resp.json() or {}).get("data") or []
+        if len(rows) < 2:
+            return None
+        times = sorted(int(r["fundingTime"]) for r in rows)
+        hours = (times[1] - times[0]) / 3_600_000
+        return round(hours, 2) if hours > 0 else None
+    except Exception as e:
+        log.debug(f"Funding interval {symbol}: {e}")
+        return None
+
+
+# ---------------------------------------------------------------------- #
 #  Long / Short accounts
 # ---------------------------------------------------------------------- #
 
@@ -194,6 +220,8 @@ def enrich(sig, oi_1h_map: dict, oi_4h_map: dict, oi_now_map: dict):
         old = src.get(key)
         if oi_now and old:
             setattr(sig, attr, round((oi_now - old) / old * 100, 1))
+
+    sig.funding_interval_h = fetch_funding_interval(sig.symbol)
 
     rsi = fetch_rsi(sig.symbol)
     sig.rsi_15m, sig.rsi_1h, sig.rsi_4h = rsi.get("15m"), rsi.get("1h"), rsi.get("4h")

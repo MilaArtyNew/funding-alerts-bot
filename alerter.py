@@ -20,18 +20,19 @@ def _fmt_liq(usd: float) -> str:
     return f"${usd:.0f}"
 
 
-def _fmt_funding_count(next_funding_time_ms: int) -> str:
+def _fmt_funding_count(next_funding_time_ms: int, interval_h: float | None = None) -> str:
+    """«46m (4h)» — остаток до выплаты и настоящий интервал.
+
+    Интервал берётся из `enrich.fetch_funding_interval` по фактическим выплатам.
+    Раньше он угадывался здесь по остатку времени и врал (см. комментарий там же);
+    если источник не ответил — показываем только остаток, без выдуманных скобок.
+    """
     if not next_funding_time_ms:
         return "—"
-    minutes_left = max(0, (next_funding_time_ms / 1000 - time.time()) / 60)
-    # guess interval from minutes_left
-    if minutes_left <= 65:
-        interval = "1h"
-    elif minutes_left <= 260:
-        interval = "4h"
-    else:
-        interval = "8h"
-    return f"{int(minutes_left)}m ({interval})"
+    minutes_left = int(max(0, (next_funding_time_ms / 1000 - time.time()) / 60))
+    if not interval_h:
+        return f"{minutes_left}m"
+    return f"{minutes_left}m ({interval_h:g}h)"
 
 
 def _chart_url(sig: Signal) -> str:
@@ -50,7 +51,7 @@ def _fmt_rsi(value: float | None) -> str:
 def format_message(sig: Signal) -> str:
     header = "🔥 Strong signal" if sig.strong else "🟢 Long setup"
     trend = "углубляется" if sig.funding_delta < 0 else "растёт"
-    funding_count = _fmt_funding_count(sig.next_funding_time)
+    funding_count = _fmt_funding_count(sig.next_funding_time, sig.funding_interval_h)
 
     lines = [
         f"{header} — {sig.symbol}",

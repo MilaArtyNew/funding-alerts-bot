@@ -31,6 +31,7 @@ class Signal:
     oi_4h: float | None = None      # изменение OI за 4ч, %
     liq_short: float | None = None  # ликвидировано шортов за 1ч, $
     liq_long: float | None = None   # ликвидировано лонгов за 1ч, $
+    funding_interval_h: float | None = None  # настоящий интервал выплаты, ч (не догадка)
     verdict: str = "СЛАБЫЙ"
     verdict_emoji: str = "🟡"
     verdict_score: float = 0.0
