@@ -67,11 +67,19 @@ def main():
     log.info(f"Funding alerts bot started (poll={POLL_INTERVAL}s, lookback={LOOKBACK_MINUTES}m)")
 
     while True:
+        started = time.monotonic()
         try:
             run_cycle()
         except Exception as e:
             log.exception(f"Cycle error: {e}")
-        time.sleep(POLL_INTERVAL)
+        # Спим остаток интервала, а не полный: сбор снапшота теперь идёт в темпе
+        # под лимит BingX и занимает ~80с вместо 13с. Со старым `sleep(POLL_INTERVAL)`
+        # цикл растянулся бы до ~6.5 минут, а мы и так отстаём от конкурента.
+        rest = POLL_INTERVAL - (time.monotonic() - started)
+        if rest > 0:
+            time.sleep(rest)
+        else:
+            log.warning(f"Цикл занял {time.monotonic() - started:.0f}с — дольше интервала")
 
 
 if __name__ == "__main__":
