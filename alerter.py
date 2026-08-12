@@ -73,7 +73,11 @@ def format_message(sig: Signal) -> str:
     if sig.liq_short is not None and sig.liq_long is not None:
         lines.append(f"💥 Ликв 1ч: шорты {_fmt_liq(sig.liq_short)} · лонги {_fmt_liq(sig.liq_long)}")
 
-    lines.append(f"📈 OI: 1ч {_fmt_pct(sig.oi_1h)} · 4ч {_fmt_pct(sig.oi_4h)}")
+    # Помечаем OI, посчитанный не по Binance: у монет вне Binance метрика другая
+    # (BingX-снапшоты, расхождение с Binance в среднем 7.7 п.п.), и сравнивать
+    # такие цифры с остальными напрямую нельзя.
+    oi_mark = " · по BingX" if sig.oi_source == "bingx" else ""
+    lines.append(f"📈 OI: 1ч {_fmt_pct(sig.oi_1h)} · 4ч {_fmt_pct(sig.oi_4h)}{oi_mark}")
     lines.append(
         f"📊 RSI: 15м {_fmt_rsi(sig.rsi_15m)} · "
         f"1ч {_fmt_rsi(sig.rsi_1h)} · 4ч {_fmt_rsi(sig.rsi_4h)}"

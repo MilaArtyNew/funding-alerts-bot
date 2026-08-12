@@ -27,8 +27,9 @@ class Signal:
     rsi_4h: float | None = None
     ls_long: float | None = None    # % счетов в лонге за 1ч
     ls_short: float | None = None   # % счетов в шорте за 1ч
-    oi_1h: float | None = None      # изменение OI за 1ч, %
-    oi_4h: float | None = None      # изменение OI за 4ч, %
+    oi_1h: float | None = None      # изменение OI за 1ч, % (в монетах, не в $)
+    oi_4h: float | None = None      # изменение OI за 4ч, % (в монетах, не в $)
+    oi_source: str | None = None    # "binance" | "bingx" — откуда взят OI 1ч/4ч
     liq_short: float | None = None  # ликвидировано шортов за 1ч, $
     liq_long: float | None = None   # ликвидировано лонгов за 1ч, $
     funding_interval_h: float | None = None  # настоящий интервал выплаты, ч (не догадка)
@@ -93,9 +94,17 @@ def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:
         if volume_24h < VOLUME_24H_MIN:
             continue
 
+        # OI считаем В МОНЕТАХ, а не в долларах. Поле `openInterest` у BingX —
+        # долларовый notional, то есть `монеты × цена`. Сигнал мы выдаём только
+        # на растущей цене, поэтому долларовый OI рос почти всегда сам собой:
+        # условие «OI растёт» было истинно у 83% наших сигналов против 48% у
+        # конкурента (разбор 12.08). Делим на цену — получаем число монет.
         oi_change = 0.0
-        if oi_prev and oi_prev != 0 and oi_now:
-            oi_change = (oi_now - oi_prev) / oi_prev * 100
+        if oi_prev and oi_now and price_prev and price_now:
+            coins_prev = oi_prev / price_prev
+            coins_now = oi_now / price_now
+            if coins_prev:
+                oi_change = (coins_now - coins_prev) / coins_prev * 100
 
         # Filter 5: OI must be growing (not contracting)
         if oi_change < OI_CHANGE_MIN:

@@ -43,7 +43,12 @@ def run_cycle():
 
 
 def _oi_map(records: list[dict]) -> dict:
-    return {(r["symbol"], r["exchange"]): r.get("oi") for r in records}
+    """(symbol, exchange) -> (oi_usdt, price).
+
+    Цена нужна вместе с OI: `openInterest` у BingX — долларовый notional,
+    и чтобы получить число монет, его надо делить на цену того же снапшота.
+    """
+    return {(r["symbol"], r["exchange"]): (r.get("oi"), r.get("price")) for r in records}
 
 
 def _enrich_signals(signals: list, records: list[dict], now_ts: int):

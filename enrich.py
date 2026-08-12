@@ -181,6 +181,55 @@ def fetch_liquidations(symbol: str) -> tuple[float, float] | None:
 
 
 # ---------------------------------------------------------------------- #
+#  Open Interest
+# ---------------------------------------------------------------------- #
+
+def fetch_oi_binance(symbol: str) -> tuple[float, float] | None:
+    """(изменение OI за 1ч %, за 4ч %) по числу монет, с Binance.
+
+    Почему не BingX: поле `openInterest` у BingX — долларовый notional
+    (`монеты × цена`), а истории OI у BingX нет вообще (`openInterestHist`
+    отвечает code=100400). Конкурент считает монеты — его цифры совпадают
+    с `sumOpenInterest` Binance с точностью 0.4 п.п. на 8 общих сигналах,
+    наши долларовые мимо на 24 п.п. (разбор 12.08).
+
+    Пересчёт истории по 71 закрытой сделке: `OI 4ч > 0` разделяет выборку
+    на +0.07$ и −0.64$ на сделку, тогда как старый вердикт на долларовом OI
+    давал −0.09$ против −0.31$.
+
+    None — монеты нет на Binance (19% нашего юниверса) или мало истории.
+    """
+    flat = symbol.replace("-", "")
+    try:
+        resp = CLIENT.get(f"{BINANCE_BASE}/futures/data/openInterestHist",
+                          params={"symbol": flat, "period": "5m", "limit": 60})
+        if resp.status_code != 200:
+            log.info(f"OI binance {flat}: HTTP {resp.status_code}")
+            return None
+        rows = resp.json()
+    except Exception as e:
+        log.warning(f"OI binance {flat}: {e}")
+        return None
+    if not isinstance(rows, list) or len(rows) < 50:
+        return None
+
+    pts = sorted((int(r["timestamp"]), float(r["sumOpenInterest"])) for r in rows)
+    now_ms = pts[-1][0]
+
+    def at(ms_ago: int) -> float | None:
+        target = now_ms - ms_ago
+        # допуск 15 мин: period=5m, отдельные точки у Binance выпадают
+        older = [p for p in pts if p[0] <= target and target - p[0] <= 900_000]
+        return older[-1][1] if older else None
+
+    cur = pts[-1][1]
+    h1, h4 = at(3_600_000), at(14_400_000)
+    if not (cur and h1 and h4):
+        return None
+    return round((cur - h1) / h1 * 100, 1), round((cur - h4) / h4 * 100, 1)
+
+
+# ---------------------------------------------------------------------- #
 #  Вердикт
 # ---------------------------------------------------------------------- #
 
@@ -211,15 +260,42 @@ def verdict(sig) -> tuple[str, str, float]:
     return "🟡", "СЛАБЫЙ", score
 
 
+def _oi_from_snapshots(sig, oi_1h_map: dict, oi_4h_map: dict, oi_now_map: dict) -> bool:
+    """Запасной путь: OI из наших снапшотов BingX, пересчитанный в МОНЕТЫ.
+
+    В картах лежит `(oi_usdt, price)`. Делим одно на другое — получаем монеты.
+    Метрика не идентична биржевой (BingX против Binance расходятся в среднем
+    на 7.7 п.п.), поэтому источник помечается в `sig.oi_source`.
+    """
+    key = (sig.symbol, sig.exchange)
+    now = oi_now_map.get(key)
+    if not now or not now[0] or not now[1]:
+        return False
+    coins_now = now[0] / now[1]
+    ok = False
+    for src, attr in ((oi_1h_map, "oi_1h"), (oi_4h_map, "oi_4h")):
+        old = src.get(key)
+        if not old or not old[0] or not old[1]:
+            continue
+        coins_old = old[0] / old[1]
+        if coins_old:
+            setattr(sig, attr, round((coins_now - coins_old) / coins_old * 100, 1))
+            ok = True
+    return ok
+
+
 def enrich(sig, oi_1h_map: dict, oi_4h_map: dict, oi_now_map: dict):
     """Дозаполнить сигнал контекстом. Мутирует sig на месте."""
-    key = (sig.symbol, sig.exchange)
-
-    oi_now = oi_now_map.get(key)
-    for label, src, attr in (("1h", oi_1h_map, "oi_1h"), ("4h", oi_4h_map, "oi_4h")):
-        old = src.get(key)
-        if oi_now and old:
-            setattr(sig, attr, round((oi_now - old) / old * 100, 1))
+    # OI: Binance основной (там монеты и есть история), наши снапшоты запасной.
+    # Смешивать два источника под одним порогом опасно — это ровно тот класс
+    # ошибки, который нашли 12.08, — поэтому источник пишется в sig.oi_source.
+    oi = fetch_oi_binance(sig.symbol)
+    if oi:
+        sig.oi_1h, sig.oi_4h = oi
+        sig.oi_source = "binance"
+    elif _oi_from_snapshots(sig, oi_1h_map, oi_4h_map, oi_now_map):
+        sig.oi_source = "bingx"
+        log.info(f"OI {sig.symbol}: монеты нет на Binance, считаем по снапшотам BingX")
 
     sig.funding_interval_h = fetch_funding_interval(sig.symbol)
 
