@@ -43,6 +43,18 @@ def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:
     prev_map = {(r["symbol"], r["exchange"]): r for r in previous}
     signals = []
 
+    # Причина отсева по символу. Без неё разбор расхождений с конкурентом упирается
+    # в то, что снапшоты живут 5 часов и задним числом уже ничего не восстановить
+    # (сверка 13.08: из 12 его сигналов один остался необъяснённым).
+    # Пишем подробно только про тех, кто прошёл фандинговые фильтры — таких
+    # единицы за цикл, остальные 560 символов отсеиваются на первом же условии.
+    funnel = {"пар": 0, "фандинг": 0, "цена": 0, "объём": 0, "OI": 0}
+    near: list[str] = []
+
+    def отсев(symbol, причина, rec_price, fp, fn):
+        near.append(f"{symbol} — {причина} [цена {rec_price:+.2f}%, "
+                    f"фандинг {fp:+.3f}→{fn:+.3f}%]")
+
     for rec in current:
         symbol = rec["symbol"]
         exchange = rec["exchange"]
@@ -65,6 +77,8 @@ def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:
         if price_prev == 0:
             continue
 
+        funnel["пар"] += 1
+
         # Filter 1: 30m ago funding was at/above threshold (fresh crossing only)
         if funding_prev < FUNDING_THRESHOLD:
             continue
@@ -81,18 +95,29 @@ def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:
         if funding_delta > FUNDING_DELTA_MIN:
             continue
 
-        # Filter 4: price must be rising but not already pumped
+        funnel["фандинг"] += 1
         price_change = (price_now - price_prev) / price_prev * 100
+
+        # Filter 4: price must be rising but not already pumped
         if price_change < PRICE_CHANGE_MIN:
+            отсев(symbol, f"цена {price_change:+.2f}% < {PRICE_CHANGE_MIN}%",
+                  price_change, funding_prev, funding_now)
             continue
         if price_change > PRICE_CHANGE_MAX:
+            отсев(symbol, f"цена {price_change:+.2f}% > {PRICE_CHANGE_MAX}%",
+                  price_change, funding_prev, funding_now)
             continue
 
+        funnel["цена"] += 1
         volume_24h = rec.get("volume_24h", 0) or 0
 
         # Filter 5: minimum liquidity (24h volume)
         if volume_24h < VOLUME_24H_MIN:
+            отсев(symbol, f"объём 24ч {volume_24h:,.0f}$ < {VOLUME_24H_MIN:,.0f}$",
+                  price_change, funding_prev, funding_now)
             continue
+
+        funnel["объём"] += 1
 
         # OI считаем В МОНЕТАХ, а не в долларах. Поле `openInterest` у BingX —
         # долларовый notional, то есть `монеты × цена`. Сигнал мы выдаём только
@@ -106,10 +131,13 @@ def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:
             if coins_prev:
                 oi_change = (coins_now - coins_prev) / coins_prev * 100
 
-        # Filter 5: OI must be growing (not contracting)
+        # Filter 6: OI must be growing (not contracting)
         if oi_change < OI_CHANGE_MIN:
+            отсев(symbol, f"OI 30м {oi_change:+.2f}% < {OI_CHANGE_MIN}% (в монетах)",
+                  price_change, funding_prev, funding_now)
             continue
 
+        funnel["OI"] += 1
         strong = short_liq >= SHORT_LIQ_MIN
 
         signals.append(Signal(
@@ -130,5 +158,11 @@ def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:
             f"Signal: [{exchange}] {symbol} funding={funding_now:+.4f}% "
             f"(Δ{funding_delta:+.4f}%) price={price_change:+.2f}%"
         )
+
+    log.info("Воронка: пар %d → фандинг %d → цена %d → объём %d → OI %d → сигналов %d",
+             funnel["пар"], funnel["фандинг"], funnel["цена"],
+             funnel["объём"], funnel["OI"], len(signals))
+    for line in near:
+        log.info("Отсев: %s", line)
 
     return signals
