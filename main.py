@@ -2,7 +2,7 @@ import logging
 import os
 import time
 
-from config import POLL_INTERVAL, LOOKBACK_MINUTES, DATA_DIR, SNAPSHOT_RETENTION_HOURS
+from config import POLL_INTERVAL, LOOKBACK_MINUTES, DATA_DIR, SNAPSHOT_RETENTION_HOURS, OI_1H_MIN
 from db import init_db, save_snapshots, get_snapshots_before, purge_old
 from collector import collect_snapshot
 from signal_engine import evaluate
@@ -31,11 +31,14 @@ def run_cycle():
         log.info("No historical data yet, accumulating...")
         return
 
-    signals = evaluate(records, prev_records)
-    if signals:
-        log.info(f"Sending {len(signals)} signal(s)")
-        _enrich_signals(signals, records, now_ts)
-        send_signals(signals)
+    candidates = evaluate(records, prev_records)
+    if candidates:
+        # Enrich обязателен до фильтра: OI 1ч тянется с Binance внутри него.
+        _enrich_signals(candidates, records, now_ts)
+        signals = _filter_oi_1h(candidates)
+        if signals:
+            log.info(f"Sending {len(signals)} signal(s)")
+            send_signals(signals)
     else:
         log.info("No signals this cycle")
 
@@ -49,6 +52,28 @@ def _oi_map(records: list[dict]) -> dict:
     и чтобы получить число монет, его надо делить на цену того же снапшота.
     """
     return {(r["symbol"], r["exchange"]): (r.get("oi"), r.get("price")) for r in records}
+
+
+def _filter_oi_1h(candidates: list) -> list:
+    """Фильтр по OI на горизонте 1ч. Заменил фильтр на 30м 2026-08-15.
+
+    Стоит здесь, а не в `signal_engine`, потому что `oi_1h` появляется только
+    после enrich (Binance `openInterestHist`, монеты).
+
+    `oi_1h is None` пропускаем: у части монет OI недоступен ни с Binance, ни из
+    снапшотов, а конкурент такие сигналы шлёт (OPENEDEN и DOS 14.08, оба тейк).
+    Отсекать их значило бы молча потерять целый класс монет.
+    """
+    kept = []
+    for sig in candidates:
+        if sig.oi_1h is not None and sig.oi_1h <= OI_1H_MIN:
+            log.info("Отсев: %s — OI 1ч %+.2f%% <= %.1f%% [цена %+.2f%%, OI 4ч %s]",
+                     sig.symbol, sig.oi_1h, OI_1H_MIN, sig.price_change_pct,
+                     "н/д" if sig.oi_4h is None else f"{sig.oi_4h:+.2f}%")
+            continue
+        kept.append(sig)
+    log.info("Фильтр OI 1ч: кандидатов %d → сигналов %d", len(candidates), len(kept))
+    return kept
 
 
 def _enrich_signals(signals: list, records: list[dict], now_ts: int):

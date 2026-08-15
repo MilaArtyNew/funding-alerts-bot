@@ -8,12 +8,23 @@ FUNDING_THRESHOLD = float(os.environ.get("FUNDING_THRESHOLD", "-0.10"))   # fund
 FUNDING_DELTA_MIN = float(os.environ.get("FUNDING_DELTA_MIN", "-0.005"))  # min delta to filter float micro-noise
 PRICE_CHANGE_MIN = float(os.environ.get("PRICE_CHANGE_MIN", "1.0"))        # %
 PRICE_CHANGE_MAX = float(os.environ.get("PRICE_CHANGE_MAX", "10.0"))       # % cap — skip already-pumped coins
-# Порог роста OI за LOOKBACK_MINUTES. Был 1.0 — но это калибровка под старый баг,
-# когда OI умножался на цену и на растущей монете порог пробивался сам собой.
-# На честных числах медиана роста OI за 30м = −0.04%, порог 1.0% проходят лишь 13% пар,
-# и он резал реальные сигналы (EUL, ON — оба закрылись в плюс у конкурента).
-# 0.1 совпадает с OI_GROWTH_MIN, который используется в вердикте.
-OI_CHANGE_MIN = float(os.environ.get("OI_CHANGE_MIN", "0.1"))             # % OI change required
+# Фильтр по OI: горизонт 1ч, а не 30м (решение 2026-08-15).
+#
+# Фильтр на 30м снят. Он оставался последним структурным отличием от конкурента:
+# на CAP 14.08 16:58 у нас OI 30м был −2.3…−3.8% (в монетах) при его OI 1ч +7.2%
+# и 4ч +13.9% — монета росла на часе и падала на получасе, он такие пропускает,
+# мы резали. За 22ч лога фильтр 30м отсеял 39 событий по 13 монетам из 62,
+# прошедших цену и объём.
+#
+# OI_1H_MIN — новый порог, «OI 1ч > 0». Считается уже после enrich, потому что
+# OI 1ч берётся с Binance (`openInterestHist`, монеты), а не из снапшотов.
+# Если OI недоступен (None) — сигнал проходит: конкурент шлёт сигналы по монетам
+# с «OI н/д» (OPENEDEN и DOS 14.08, оба закрылись в тейк).
+OI_1H_MIN = float(os.environ.get("OI_1H_MIN", "0.0"))                     # % роста OI за 1ч
+
+# Откат к фильтру на 30м: выставить OI_CHANGE_MIN в env (например -1.0).
+# По умолчанию выключен — значение заведомо ниже любого реального изменения OI.
+OI_CHANGE_MIN = float(os.environ.get("OI_CHANGE_MIN", "-100.0"))          # % OI за 30м, off by default
 VOLUME_24H_MIN = float(os.environ.get("VOLUME_24H_MIN", "500000"))         # USD 24h volume — skip illiquid coins
 SHORT_LIQ_MIN = float(os.environ.get("SHORT_LIQ_MIN", "200000"))           # USD
 COOLDOWN_MINUTES = int(os.environ.get("COOLDOWN_MINUTES", "360"))          # min between same-coin alerts

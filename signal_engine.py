@@ -48,7 +48,7 @@ def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:
     # (сверка 13.08: из 12 его сигналов один остался необъяснённым).
     # Пишем подробно только про тех, кто прошёл фандинговые фильтры — таких
     # единицы за цикл, остальные 560 символов отсеиваются на первом же условии.
-    funnel = {"пар": 0, "фандинг": 0, "цена": 0, "объём": 0, "OI": 0}
+    funnel = {"пар": 0, "фандинг": 0, "цена": 0, "объём": 0, "OI 30м": 0}
     near: list[str] = []
 
     def отсев(symbol, причина, rec_price, fp, fn):
@@ -131,13 +131,15 @@ def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:
             if coins_prev:
                 oi_change = (coins_now - coins_prev) / coins_prev * 100
 
-        # Filter 6: OI must be growing (not contracting)
+        # Filter 6: OI за 30м. По умолчанию выключен (OI_CHANGE_MIN = -100) —
+        # фильтр по OI перенесён на горизонт 1ч и живёт в main._filter_oi_1h,
+        # см. комментарий в config.py. Здесь остался как путь отката через env.
         if oi_change < OI_CHANGE_MIN:
             отсев(symbol, f"OI 30м {oi_change:+.2f}% < {OI_CHANGE_MIN}% (в монетах)",
                   price_change, funding_prev, funding_now)
             continue
 
-        funnel["OI"] += 1
+        funnel["OI 30м"] += 1
         strong = short_liq >= SHORT_LIQ_MIN
 
         signals.append(Signal(
@@ -159,9 +161,9 @@ def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:
             f"(Δ{funding_delta:+.4f}%) price={price_change:+.2f}%"
         )
 
-    log.info("Воронка: пар %d → фандинг %d → цена %d → объём %d → OI %d → сигналов %d",
+    log.info("Воронка: пар %d → фандинг %d → цена %d → объём %d → OI 30м %d → кандидатов %d",
              funnel["пар"], funnel["фандинг"], funnel["цена"],
-             funnel["объём"], funnel["OI"], len(signals))
+             funnel["объём"], funnel["OI 30м"], len(signals))
     for line in near:
         log.info("Отсев: %s", line)
 
