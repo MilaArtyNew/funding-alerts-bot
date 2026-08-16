@@ -66,11 +66,19 @@ def _filter_oi_1h(candidates: list) -> list:
     """
     kept = []
     for sig in candidates:
+        # OI 30м пишем в лог всегда, хотя фильтр по нему выключен: без этого
+        # в сверке нельзя ответить «а срезал бы старый фильтр этот сигнал?».
+        # 15-16.08 такой вопрос уже возник и данных не оказалось.
+        oi30 = "н/д" if sig.oi_change_pct is None else f"{sig.oi_change_pct:+.2f}%"
         if sig.oi_1h is not None and sig.oi_1h <= OI_1H_MIN:
-            log.info("Отсев: %s — OI 1ч %+.2f%% <= %.1f%% [цена %+.2f%%, OI 4ч %s]",
-                     sig.symbol, sig.oi_1h, OI_1H_MIN, sig.price_change_pct,
+            log.info("Отсев: %s — OI 1ч %+.2f%% <= %.1f%% [цена %+.2f%%, OI 30м %s, OI 4ч %s]",
+                     sig.symbol, sig.oi_1h, OI_1H_MIN, sig.price_change_pct, oi30,
                      "н/д" if sig.oi_4h is None else f"{sig.oi_4h:+.2f}%")
             continue
+        log.info("Прошёл: %s — OI 1ч %s [цена %+.2f%%, OI 30м %s, OI 4ч %s]",
+                 sig.symbol, "н/д" if sig.oi_1h is None else f"{sig.oi_1h:+.2f}%",
+                 sig.price_change_pct, oi30,
+                 "н/д" if sig.oi_4h is None else f"{sig.oi_4h:+.2f}%")
         kept.append(sig)
     log.info("Фильтр OI 1ч: кандидатов %d → сигналов %d", len(candidates), len(kept))
     return kept
