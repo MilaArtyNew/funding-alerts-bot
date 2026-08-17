@@ -25,7 +25,11 @@ COINGLASS_BASE = "https://open-api-v4.coinglass.com"
 CLIENT = httpx.Client(timeout=10)
 
 RSI_PERIOD = 14
-_INTERVALS = (("15m", "15m"), ("1h", "1h"), ("4h", "4h"))
+# 1д добавлен 2026-08-17: разбор шести сигналов конкурента 16-17.08 показал, что
+# вердикт у него гасит именно дневной RSI, а не 4ч. CAP их различает: 4ч 62 при
+# 1д 78 → у него СЛАБЫЙ. Пока поля не было, гипотезу нельзя было ни проверить,
+# ни применить. На вердикт наш RSI по-прежнему не влияет — только в сообщение.
+_INTERVALS = (("15m", "15m"), ("1h", "1h"), ("4h", "4h"), ("1d", "1d"))
 
 
 # ---------------------------------------------------------------------- #
@@ -301,6 +305,7 @@ def enrich(sig, oi_1h_map: dict, oi_4h_map: dict, oi_now_map: dict):
 
     rsi = fetch_rsi(sig.symbol)
     sig.rsi_15m, sig.rsi_1h, sig.rsi_4h = rsi.get("15m"), rsi.get("1h"), rsi.get("4h")
+    sig.rsi_1d = rsi.get("1d")
 
     ls = fetch_long_short(sig.symbol)
     if ls:

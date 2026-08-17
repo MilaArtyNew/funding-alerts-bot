@@ -25,6 +25,7 @@ class Signal:
     rsi_15m: float | None = None
     rsi_1h: float | None = None
     rsi_4h: float | None = None
+    rsi_1d: float | None = None     # дневной; у конкурента в сигнале есть, у нас не было
     ls_long: float | None = None    # % счетов в лонге за 1ч
     ls_short: float | None = None   # % счетов в шорте за 1ч
     oi_1h: float | None = None      # изменение OI за 1ч, % (в монетах, не в $)
