@@ -43,10 +43,23 @@ SNAPSHOT_RETENTION_HOURS = float(os.environ.get("SNAPSHOT_RETENTION_HOURS", "5")
 # Signal context (enrich.py)
 COINGLASS_API_KEY = os.environ.get("COINGLASS_API_KEY", "")   # без него строка ликвидаций не выводится
 
-# Вердикт ВХОД: OI растёт на обоих горизонтах + толпа не в лонге.
-# Пороги подобраны по 10 сигналам конкурента (совпадение 10/10).
-OI_GROWTH_MIN = float(os.environ.get("OI_GROWTH_MIN", "0.1"))      # % роста OI на 1ч и 4ч
+# Вердикт ВХОД: OI 4ч растёт + толпа не в лонге + рынок не перегрет по дневному RSI.
+#
+# 2026-08-17: правило переписано по разбору 6 сигналов конкурента за 16-17.08.
+# Было «OI 1ч > 0 И OI 4ч > 0 И шорт ≥ 45%» — давало 2/5 совпадений.
+# Стало «OI 4ч > 0 И шорт ≥ 45% И RSI 1д < 70» — объясняет 6/6:
+#   · HOME с OI 1ч −1.0% у него ВХОД → OI 1ч в вердикте не участвует
+#     (второе подтверждение после EPIC 16.08 с OI 1ч −0.1%);
+#   · CAP, PORTAL, ONG у него СЛАБЫЙ при RSI 1д 78-80 → дневной RSI гасит вердикт.
+#     Именно 1д, а не 4ч: у CAP 4ч всего 62.
+# Старая регрессия на 10 сигналах 29-31.07 сохраняется 10/10 — OI 1ч был там
+# избыточным условием, ни один вердикт на нём не держался.
+#
+# Откат: VERDICT_USE_OI_1H=true вернёт условие по OI 1ч, RSI_1D_MAX=1000 снимет RSI.
+OI_GROWTH_MIN = float(os.environ.get("OI_GROWTH_MIN", "0.1"))      # % роста OI (4ч, и 1ч если включён)
 SHORT_SHARE_MIN = float(os.environ.get("SHORT_SHARE_MIN", "45"))   # мин. доля шортов, %
+RSI_1D_MAX = float(os.environ.get("RSI_1D_MAX", "70"))             # выше — вердикт гасится
+VERDICT_USE_OI_1H = os.environ.get("VERDICT_USE_OI_1H", "").lower() in ("1", "true", "yes")
 CROWD_SHORT_PCT = float(os.environ.get("CROWD_SHORT_PCT", "65"))   # с этой доли помечаем «толпа в шорте»
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")

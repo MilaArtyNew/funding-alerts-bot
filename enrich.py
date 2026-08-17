@@ -13,7 +13,8 @@ import logging
 
 import httpx
 
-from config import COINGLASS_API_KEY, OI_GROWTH_MIN, SHORT_SHARE_MIN
+from config import (COINGLASS_API_KEY, OI_GROWTH_MIN, SHORT_SHARE_MIN,
+                    RSI_1D_MAX, VERDICT_USE_OI_1H)
 
 log = logging.getLogger(__name__)
 
@@ -240,19 +241,32 @@ def fetch_oi_binance(symbol: str) -> tuple[float, float] | None:
 def verdict(sig) -> tuple[str, str, float]:
     """(emoji, label, score) — сколько из трёх условий выполнено.
 
-    Правило восстановлено по 10 сигналам конкурента (совпадение 10/10, см. README):
-    ВХОД = OI растёт И на 1ч, И на 4ч, И толпа не в лонге (шортов ≥ SHORT_SHARE_MIN).
+    ВХОД = OI 4ч растёт И толпа не в лонге (шортов ≥ SHORT_SHARE_MIN)
+           И рынок не перегрет на дне (RSI 1д < RSI_1D_MAX).
 
-    Смысл: позиции набираются на обоих горизонтах, а шорты есть кому ликвидировать.
-    RSI и ликвидации на вердикт не влияют — по ним правило не сходится (7/10 и 5/10
-    промахов), они остаются справочными.
+    Смысл: позиции набираются на длинном горизонте, шорты есть кому ликвидировать,
+    и монета не на вершине дневного движения — на перегретой мы покупаем у выхода.
+
+    Переписано 2026-08-17 по 6 сигналам конкурента за 16-17.08 (объясняет 6/6,
+    прежнее правило давало 2/5). Подробности и откат — в `config.py`.
+    Ликвидации и RSI 15м/1ч/4ч на вердикт не влияют — по ним правило не сходится.
     """
-    if sig.oi_1h is None or sig.oi_4h is None:
-        return "▫️", "н/д", 0.0   # без OI правило не считается вообще
+    if sig.oi_4h is None:
+        return "▫️", "н/д", 0.0   # без OI 4ч правило не считается вообще
 
-    checks = [sig.oi_1h >= OI_GROWTH_MIN, sig.oi_4h >= OI_GROWTH_MIN]
+    checks = [sig.oi_4h >= OI_GROWTH_MIN]
+    if VERDICT_USE_OI_1H:
+        # Откат к правилу до 2026-08-17. None здесь = провал условия: раньше такой
+        # сигнал вообще не получал вердикта, так что мягче трактовать нельзя.
+        checks.append(sig.oi_1h is not None and sig.oi_1h >= OI_GROWTH_MIN)
+    if sig.rsi_1d is None:
+        # Источник отвалился — решаем по остальным условиям, как и с Л/Ш.
+        # Сигналы до 2026-08-17 дневного RSI не имеют вовсе.
+        sig.verdict_partial = True
+    else:
+        checks.append(sig.rsi_1d < RSI_1D_MAX)
     if sig.ls_short is None:
-        # Л/Ш не достали — решаем по двум условиям из трёх и помечаем неполноту,
+        # Л/Ш не достали — решаем по оставшимся условиям и помечаем неполноту,
         # чтобы сигнал не оставался без вердикта из-за отвалившегося источника
         sig.verdict_partial = True
     else:
