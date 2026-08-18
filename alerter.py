@@ -48,6 +48,22 @@ def _fmt_rsi(value: float | None) -> str:
     return "н/д" if value is None else f"{value:.0f}"
 
 
+def _verdict_marks(sig: Signal) -> str:
+    """Оговорки к вердикту: чего не хватило и насколько он устойчив.
+
+    · без Л/Ш — источник Л/Ш (или дневного RSI) не ответил, считали по остатку.
+    · на грани — вердикт держится на OI 4ч в пределах расхождения источников
+      (медиана 0.63 п.п. по замеру 18.08 при пороге 0.1). Другой источник OI
+      дал бы противоположный вердикт — доверять ему не стоит.
+    """
+    marks = []
+    if sig.verdict_partial:
+        marks.append("без Л/Ш")
+    if sig.verdict_edge:
+        marks.append("на грани")
+    return "".join(f" · {m}" for m in marks)
+
+
 def format_message(sig: Signal) -> str:
     header = "🔥 Strong signal" if sig.strong else "🟢 Long setup"
     trend = "углубляется" if sig.funding_delta < 0 else "растёт"
@@ -60,7 +76,7 @@ def format_message(sig: Signal) -> str:
         f"⏱️ Выплата фандинга через {funding_count}",
         f"💹 Цена за 30м: {sig.price_change_pct:+.2f}%",
         "",
-        f"{sig.verdict_emoji} {sig.verdict}" + (" · без Л/Ш" if sig.verdict_partial else ""),
+        f"{sig.verdict_emoji} {sig.verdict}{_verdict_marks(sig)}",
     ]
 
     if sig.ls_long is not None and sig.ls_short is not None:

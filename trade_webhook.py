@@ -24,6 +24,9 @@ def send_trade_signal(sig: Signal):
         "strong": sig.strong,
         "verdict": sig.verdict,             # ВХОД | СЛАБЫЙ — исполнитель пишет в статистику
         "verdict_score": sig.verdict_score,
+        # Вердикт держится на OI 4ч внутри шума источников (замер 18.08).
+        # Исполнитель пока не пишет — колонки в `trades.db` нет, приём по `.get()`.
+        "verdict_edge": sig.verdict_edge,
         "funding_now": sig.funding_now,
         "oi_change_pct": sig.oi_change_pct,
         "price_change_pct": sig.price_change_pct,

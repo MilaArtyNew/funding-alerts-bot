@@ -13,8 +13,8 @@ import logging
 
 import httpx
 
-from config import (COINGLASS_API_KEY, OI_GROWTH_MIN, SHORT_SHARE_MIN,
-                    RSI_1D_MAX, VERDICT_USE_OI_1H)
+from config import (COINGLASS_API_KEY, OI_EDGE_PP, OI_GROWTH_MIN,
+                    SHORT_SHARE_MIN, RSI_1D_MAX, VERDICT_USE_OI_1H)
 
 log = logging.getLogger(__name__)
 
@@ -249,6 +249,9 @@ def verdict(sig) -> tuple[str, str, float]:
 
     Переписано 2026-08-17 по 6 сигналам конкурента за 16-17.08 (объясняет 6/6,
     прежнее правило давало 2/5). Подробности и откат — в `config.py`.
+
+    Побочно выставляет `sig.verdict_edge` — вердикт держится на значении OI 4ч,
+    которое меньше расхождения между источниками OI (замер 18.08).
     Ликвидации и RSI 15м/1ч/4ч на вердикт не влияют — по ним правило не сходится.
     """
     if sig.oi_4h is None:
@@ -273,7 +276,18 @@ def verdict(sig) -> tuple[str, str, float]:
         checks.append(sig.ls_short >= SHORT_SHARE_MIN)
 
     score = float(sum(checks))
-    if all(checks):
+    passed = all(checks)
+
+    # «На грани»: OI 4ч ближе к порогу, чем типичное расхождение двух источников
+    # (медиана 0.63 п.п., замер 18.08 — см. config.OI_EDGE_PP). Помечаем только
+    # если от переворота этого условия МЕНЯЕТСЯ САМ ВЕРДИКТ: когда сигнал и так
+    # СЛАБЫЙ из-за RSI или Л/Ш, шум в OI ничего не решает и пугать незачем.
+    if OI_EDGE_PP and abs(sig.oi_4h - OI_GROWTH_MIN) < OI_EDGE_PP:
+        flipped = [not checks[0]] + checks[1:]
+        if all(flipped) != passed:
+            sig.verdict_edge = True
+
+    if passed:
         return "🟢", "ВХОД", score
     return "🟡", "СЛАБЫЙ", score
 

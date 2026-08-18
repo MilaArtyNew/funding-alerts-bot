@@ -38,6 +38,7 @@ class Signal:
     verdict_emoji: str = "🟡"
     verdict_score: float = 0.0
     verdict_partial: bool = False   # вердикт посчитан без Л/Ш (источник не ответил)
+    verdict_edge: bool = False      # вердикт держится на OI 4ч в пределах шума источников
 
 
 def evaluate(current: list[dict], previous: list[dict]) -> list[Signal]:
