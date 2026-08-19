@@ -4,7 +4,8 @@
 поэтому лишней нагрузки на API нет.
 
 Источники:
-- RSI (15м / 1ч / 4ч) — BingX klines, публично
+- RSI (15м / 1ч / 4ч / 1д) — BingX klines, публично; если BingX отдал меньше 15 свечей
+  (монета там листнута недавно), берём тот же интервал с Binance — иначе RSI «н/д»
 - Л/Ш 1ч — Binance globalLongShortAccountRatio, публично; на BingX такого эндпоинта нет.
   Тикеры бирж расходятся, поэтому для части монет данных не будет — тогда «н/д».
 - Ликвидации 1ч — Coinglass, только при заданном COINGLASS_API_KEY (бесплатного источника нет)
@@ -60,7 +61,7 @@ def calc_rsi(closes: list[float], period: int = RSI_PERIOD) -> float | None:
     return round(100 - 100 / (1 + rs), 0)
 
 
-def _fetch_closes(symbol: str, interval: str, limit: int = 100) -> list[float]:
+def _closes_bingx(symbol: str, interval: str, limit: int = 100) -> list[float]:
     """Цены закрытия от старых к новым. BingX отдаёт свечи от новых к старым."""
     resp = CLIENT.get(f"{BINGX_BASE}/openApi/swap/v3/quote/klines",
                       params={"symbol": symbol, "interval": interval, "limit": limit})
@@ -68,6 +69,43 @@ def _fetch_closes(symbol: str, interval: str, limit: int = 100) -> list[float]:
     data = resp.json().get("data") or []
     candles = sorted(data, key=lambda c: int(c["time"]))
     return [float(c["close"]) for c in candles]
+
+
+def _closes_binance(flat_symbol: str, interval: str, limit: int = 100) -> list[float]:
+    """То же с Binance. Свечи уже от старых к новым, close — индекс 4."""
+    resp = CLIENT.get(f"{BINANCE_BASE}/fapi/v1/klines",
+                      params={"symbol": flat_symbol, "interval": interval, "limit": limit})
+    resp.raise_for_status()
+    return [float(c[4]) for c in resp.json()]
+
+
+def _fetch_closes(symbol: str, interval: str, limit: int = 100) -> list[float]:
+    """Свечи с BingX, а если истории не хватает на RSI — с Binance.
+
+    2026-08-19: BingX отдаёт по BMT-USDT всего **9 дневных свечей** (монета там
+    листнута ~9 дней назад), а RSI(14) требует 15. Из-за этого все четыре
+    сигнала по BMT ушли с `RSI 1д: н/д`, тогда как у конкурента там 51 — на
+    Binance та же монета торгуется дольше и отдаёт 100 свечей.
+
+    Fallback безопасен: RSI одной и той же монеты на двух биржах практически
+    совпадает — цены идут вместе, а RSI считается по их приращениям. Если монеты
+    на Binance нет (REDSTONE, CASHCAT), запрос падает и мы честно оставляем «н/д»,
+    как и раньше.
+    """
+    closes = []
+    try:
+        closes = _closes_bingx(symbol, interval, limit)
+    except Exception as e:
+        log.debug(f"klines BingX {symbol} {interval}: {e}")
+
+    if len(closes) >= RSI_PERIOD + 1:
+        return closes
+
+    flat = symbol.replace("-", "")
+    binance = _closes_binance(flat, interval, limit)
+    log.info(f"RSI {symbol} {interval}: BingX дал {len(closes)} свечей "
+             f"(нужно {RSI_PERIOD + 1}) → взяли {len(binance)} с Binance")
+    return binance
 
 
 def fetch_rsi(symbol: str) -> dict[str, float | None]:
