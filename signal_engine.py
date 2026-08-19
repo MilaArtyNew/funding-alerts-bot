@@ -37,7 +37,10 @@ class Signal:
     verdict: str = "СЛАБЫЙ"
     verdict_emoji: str = "🟡"
     verdict_score: float = 0.0
-    verdict_partial: bool = False   # вердикт посчитан без Л/Ш (источник не ответил)
+    # Вердикт посчитан без одного из условий: не ответил источник Л/Ш ИЛИ дневного
+    # RSI. Что именно отвалилось — видно по ls_short/rsi_1d, текст пометки берётся
+    # оттуда (alerter._verdict_marks), а не из этого флага.
+    verdict_partial: bool = False
     verdict_edge: bool = False      # вердикт держится на OI 4ч в пределах шума источников
 
 
