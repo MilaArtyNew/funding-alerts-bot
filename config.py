@@ -7,7 +7,25 @@ TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 FUNDING_THRESHOLD = float(os.environ.get("FUNDING_THRESHOLD", "-0.10"))   # funding_now <= X%
 FUNDING_DELTA_MIN = float(os.environ.get("FUNDING_DELTA_MIN", "-0.005"))  # min delta to filter float micro-noise
 PRICE_CHANGE_MIN = float(os.environ.get("PRICE_CHANGE_MIN", "1.0"))        # %
-PRICE_CHANGE_MAX = float(os.environ.get("PRICE_CHANGE_MAX", "10.0"))       # % cap — skip already-pumped coins
+PRICE_CHANGE_MAX = float(os.environ.get("PRICE_CHANGE_MAX", "5.0"))        # % cap — skip already-pumped coins
+#
+# Потолок цены 10% → 5% (2026-08-20). Замер по 43 сделкам, которые удалось
+# сопоставить с их сигналами в журнале:
+#
+#   цена за 30м   сделок    нетто    WR
+#   0–2%             30    +6.38$   40%
+#   2–3%              4    +0.93$   50%
+#   3–5%              1    -0.10$    0%
+#   5–10%             8    -8.30$   12%   ← отсекаем
+#
+# Восемь сделок на уже отлетевших монетах съедали весь плюс остальных 35:
+# без них выборка переворачивается с -1.10$ на +7.20$.
+#
+# Триггер — REDSTONE 20.08 07:58 МСК. В 07:55 он был отсеян на +10.41%, через
+# три минуты пролез на +9.87%, не хватило 0.13 п.п. RSI 15м 81 / 1д 74,
+# OI 1ч -9.2% — сквиз уже отработал, входить было не во что. Конкурент в тот
+# момент был жив (постил HEI в 07:44) и по REDSTONE не выстрелил.
+
 # Фильтр по OI: горизонт 1ч, а не 30м (решение 2026-08-15).
 #
 # Фильтр на 30м снят. Он оставался последним структурным отличием от конкурента:
